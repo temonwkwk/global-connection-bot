@@ -172,6 +172,7 @@ class ConnectionCog(commands.Cog):
         embed.add_field(name="Aturan", value="Satu pasangan maksimal +1 per hari. DM tidak dihitung. Koneksi berlaku global selama bot ada di server tempat interaksi terjadi.", inline=False)
         embed.add_field(name="Cek koneksi", value="`/koneksi` — daftar koneksi pribadi\n`/koneksi @member` — detail pasangan\n`/peringkat_koneksi` — peringkat global", inline=False)
         embed.add_field(name="Streak & histori", value="Streak bertambah jika terhubung setiap hari. Setelah 3 hari tanpa koneksi, current connection berkurang 50% (dibulatkan ke bawah), tetapi lifetime dan ledger tetap tersimpan.", inline=False)
+        embed.add_field(name="➕ Invite ke server lain", value="[Klik di sini untuk invite Solit](https://discord.com/oauth2/authorize?client_id=1547649664&scope=bot%20applications.commands&permissions=2147569)\nCatatan: kamu harus punya izin **Manage Server / Kelola Server** atau izin untuk menambahkan bot ke server tersebut.", inline=False)
         embed.set_footer(text="Ngobrol santai, jangan spam mention 😊")
         await interaction.response.send_message(embed=embed)
 
@@ -182,13 +183,16 @@ class ConnectionCog(commands.Cog):
             return
         if member:
             pair = self.store.get_pair(interaction.user.id, member.id)
-            await interaction.response.send_message(
-                f"🔗 **{interaction.user.display_name} × {member.display_name}**\n"
-                f"Current: **{pair['current_connections']}**\n"
-                f"Lifetime: **{pair['lifetime_connections']}**\n"
-                f"Streak: **{pair['streak']} hari**",
-                ephemeral=True,
+            embed = discord.Embed(
+                title="🔗 Koneksi kalian",
+                description=f"**{interaction.user.display_name}**  ×  **{member.display_name}**",
+                color=discord.Color.blurple(),
             )
+            embed.add_field(name="💙 Connection", value=f"**{pair['current_connections']}**", inline=True)
+            embed.add_field(name="🏆 Lifetime", value=f"**{pair['lifetime_connections']}**", inline=True)
+            embed.add_field(name="🔥 Streak", value=f"**{pair['streak']} hari**", inline=True)
+            embed.set_footer(text="Terus ngobrol untuk menjaga koneksi kalian ✨")
+            await interaction.response.send_message(embed=embed, ephemeral=True)
             return
         rows = self.store.connections_for(interaction.user.id)
         if not rows:
@@ -196,10 +200,18 @@ class ConnectionCog(commands.Cog):
         else:
             lines = []
             for row in rows[:15]:
-                other = row["user_b"] if row["user_a"] == interaction.user.id else row["user_a"]
-                lines.append(f"<@{other}> — **{row['current_connections']}** current · {row['lifetime_connections']} lifetime · streak {row['streak']} hari")
+                other_id = row["user_b"] if row["user_a"] == interaction.user.id else row["user_a"]
+                user = self.client.get_user(other_id)
+                name = user.display_name if user else f"User {other_id}"
+                lines.append(f"💙 **{name}**  ·  {row['current_connections']} connection  ·  🔥 {row['streak']} hari")
             text = "\n".join(lines)
-        await interaction.response.send_message(f"🔗 **Koneksi kamu**\n{text}", ephemeral=True)
+        embed = discord.Embed(
+            title="🔗 Koneksi kamu",
+            description=text,
+            color=discord.Color.blurple(),
+        )
+        embed.set_footer(text="Terus ngobrol untuk membangun koneksi ✨")
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @app_commands.command(name="peringkat_koneksi", description="Lihat peringkat koneksi global")
     async def peringkat(self, interaction: discord.Interaction):
@@ -230,15 +242,36 @@ class ConnectionCog(commands.Cog):
             view=GlobalResetView(self, interaction.user.id), ephemeral=True,
         )
 
+    async def safe_user_name(self, user_id: int) -> str:
+        user = self.client.get_user(user_id)
+        if user is None:
+            try:
+                user = await self.client.fetch_user(user_id)
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                return f"User {user_id}"
+        return user.display_name or user.name or f"User {user_id}"
+
     @commands.command(name="koneksi", aliases=["connection", "connections"])
     async def prefix_koneksi(self, ctx, member: discord.Member | None = None):
         if member:
             pair = self.store.get_pair(ctx.author.id, member.id)
-            await ctx.reply(f"🔗 **{ctx.author.display_name} × {member.display_name}**\nCurrent: **{pair['current_connections']}**\nLifetime: **{pair['lifetime_connections']}**\nStreak: **{pair['streak']} hari**")
+            await ctx.reply(
+                f"🔗 **Koneksi kalian**\n"
+                f"**{ctx.author.display_name}**  ×  **{member.display_name}**\n\n"
+                f"💙 Connection: **{pair['current_connections']}**\n"
+                f"🏆 Lifetime: **{pair['lifetime_connections']}**\n"
+                f"🔥 Streak: **{pair['streak']} hari**\n\n"
+                "_Terus ngobrol untuk menjaga koneksi kalian ✨_"
+            )
             return
         rows = self.store.connections_for(ctx.author.id)
-        text = "\n".join(f"<@{r['user_b'] if r['user_a'] == ctx.author.id else r['user_a']}> — {r['current_connections']} current · {r['lifetime_connections']} lifetime" for r in rows[:15]) or "Belum ada koneksi."
-        await ctx.reply(f"🔗 **Koneksi kamu**\n{text}")
+        lines = []
+        for row in rows[:15]:
+            other_id = row['user_b'] if row['user_a'] == ctx.author.id else row['user_a']
+            name = await self.safe_user_name(other_id)
+            lines.append(f"💙 **{name}**  ·  {row['current_connections']} connection  ·  🔥 {row['streak']} hari")
+        text = "\n".join(lines) or "Belum ada koneksi. Mulai ngobrol untuk membangun koneksi ✨"
+        await ctx.reply(f"🔗 **Koneksi kamu**\n\n{text}")
 
     @commands.command(name="peringkat", aliases=["ranking", "leaderboard"])
     async def prefix_peringkat(self, ctx):
@@ -278,6 +311,7 @@ class ConnectionCog(commands.Cog):
         embed.add_field(name="💬 Cara mendapatkan koneksi", value="Mention atau reply member lain. Kalau dia membalas atau mention balik di hari yang sama, kalian mendapat **+1 koneksi**.\n\nContoh:\n> A: @B sudah makan?\n> B: Sudah, kamu?", inline=False)
         embed.add_field(name="📌 Aturan", value="• Satu pasangan maksimal **+1 per hari**\n• DM tidak dihitung\n• Koneksi berlaku global selama bot ada di server interaksi\n• Setelah 3 hari tanpa koneksi, current connection berkurang 50%", inline=False)
         embed.add_field(name="📊 Command", value="`Q!koneksi` / `q!koneksi` — daftar koneksi\n`Q!koneksi @member` — detail pasangan\n`Q!peringkat` — peringkat global\n`Q!resetkoneksi` — reset dengan tombol konfirmasi", inline=False)
+        embed.add_field(name="➕ Invite ke server lain", value="[Klik di sini untuk invite Solit](https://discord.com/oauth2/authorize?client_id=1547649664&scope=bot%20applications.commands&permissions=2147569)\nCatatan: kamu harus punya izin **Manage Server / Kelola Server** atau izin untuk menambahkan bot ke server tersebut.", inline=False)
         embed.set_footer(text="Ngobrol santai, jangan spam mention 😊")
         await ctx.send(embed=embed)
 

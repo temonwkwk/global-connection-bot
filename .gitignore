@@ -6,3 +6,4 @@ __pycache__/
 *.swp
 data/*.sqlite3
 data/*.json
+data/*.log

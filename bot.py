@@ -363,20 +363,6 @@ class ConnectionCog(commands.Cog):
         log.info("privacy_updated user_id=%s opt_out=%s leaderboard_opt_out=%s", interaction.user.id, opt_out, leaderboard)
         await interaction.response.send_message("✅ Pengaturan privacy kamu sudah diperbarui.", ephemeral=True)
 
-    @app_commands.command(name="peringkat_server", description="Lihat peringkat koneksi di server ini")
-    async def peringkat_server(self, interaction: discord.Interaction):
-        if interaction.guild is None:
-            await interaction.response.send_message("Command ini hanya bisa dipakai di server.", ephemeral=True)
-            return
-        rows = self.store.server_leaderboard(interaction.guild.id)
-        lines = []
-        for index, row in enumerate(rows, start=1):
-            first = await self.leaderboard_name(row["user_a"])
-            second = await self.leaderboard_name(row["user_b"])
-            lines.append(f"**{index}.** **{first}** × **{second}** — **{row['connections']}**")
-        text = "\n".join(lines) or "Belum ada koneksi di server ini."
-        await interaction.response.send_message(f"🏆 **Peringkat Koneksi Server**\n{text}")
-
     @app_commands.command(name="reset_koneksi", description="Reset data koneksi testing")
     @app_commands.describe(member="Kosongkan untuk reset global; isi untuk reset satu pasangan")
     async def reset(self, interaction: discord.Interaction, member: discord.Member | None = None):

@@ -14,6 +14,9 @@ Riwayat perubahan proyek: [`CHANGELOG.md`](CHANGELOG.md).
 - Lifetime connection tidak berkurang.
 - Prefix menerima `Q!` dan `q!`.
 - Reset global atau pasangan dilindungi tombol konfirmasi dan hanya owner.
+- Wallet LinkCoin: user baru mendapat **10.000 LinkCoin**, terlihat di profil.
+- Streak 7 hari memberi **100 LinkCoin** ke masing-masing member pasangan (milestone tiap kelipatan 7).
+- Minigame pertama: `Q!dice <taruhan> high/low`, taruhan 10–2.000 LinkCoin.
 
 ## Command
 
@@ -21,6 +24,8 @@ Riwayat perubahan proyek: [`CHANGELOG.md`](CHANGELOG.md).
 Q!intro / q!intro
 Q!koneksi / q!koneksi (top 5; koneksi yang di-hide tampil sebagai `someone`)
 Q!koneksi @member
+Q!dice <taruhan> high/low — game dadu LinkCoin (10–2.000)
+Q!profil — termasuk saldo LinkCoin
 `Q!sembunyikankoneksi @member on/off` — sembunyikan atau tampilkan koneksi dengan member tertentu
 Q!peringkatglobal / q!peringkatglobal — peringkat koneksi global lintas server
 `Q!peringkat` / `q!peringkat` — peringkat koneksi server

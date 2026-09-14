@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import os
+import secrets
 import sqlite3
 from logging.handlers import RotatingFileHandler
 from datetime import date, datetime, timezone
@@ -322,6 +323,7 @@ class ConnectionCog(commands.Cog):
         embed.add_field(name="🏆 Lifetime", value=f"**{stats['lifetime_connections']}**", inline=True)
         embed.add_field(name="🤝 Partner", value=f"**{stats['unique_partners']}**", inline=True)
         embed.add_field(name="🔥 Streak terbaik", value=f"**{stats['best_streak']} hari**", inline=True)
+        embed.add_field(name="💰 Saldo", value=f"**{stats['balance']:,} LinkCoin**", inline=True)
         embed.add_field(name="🔒 Privacy", value="Opt-out aktif" if self.store.is_opted_out(interaction.user.id) else "Aktif", inline=True)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -466,6 +468,33 @@ class ConnectionCog(commands.Cog):
         status = "disembunyikan dari peringkat" if hidden else "ditampilkan lagi di peringkat"
         await ctx.reply(f"✅ Koneksi kamu dengan **{member.display_name}** sekarang **{status}**.")
 
+    @commands.command(name="dice", aliases=["dadu"])
+    async def dice(self, ctx, amount: int = 0, pilihan: str = ""):
+        """High-low dice: Q!dice <taruhan> high|low."""
+        pilihan = pilihan.lower()
+        if amount <= 0 or pilihan not in {"high", "low", "tinggi", "rendah"}:
+            await ctx.reply("Pakai: `Q!dice <taruhan> high/low` · taruhan 10–2.000 LinkCoin.")
+            return
+        if amount < 10 or amount > 2_000:
+            await ctx.reply("Taruhan minimal 10 dan maksimal 2.000 LinkCoin.")
+            return
+        pilihan = "high" if pilihan in {"high", "tinggi"} else "low"
+        balance = self.store.get_balance(ctx.author.id)
+        if balance < amount:
+            await ctx.reply(f"Saldo kamu **{balance:,} LinkCoin**, tidak cukup untuk taruhan itu.")
+            return
+        roll = secrets.randbelow(11) + 2
+        menang = (pilihan == "low" and 2 <= roll <= 6) or (pilihan == "high" and 8 <= roll <= 12)
+        today = utc_date()
+        if menang:
+            # Deduct the stake, then return stake + winnings: net profit = 80%.
+            self.store.change_balance(ctx.author.id, -amount, "dice_bet", today, {"roll": roll, "pick": pilihan})
+            new_balance = self.store.change_balance(ctx.author.id, amount + (amount * 4 // 5), "dice_win", today, {"roll": roll, "pick": pilihan})
+            await ctx.reply(f"🎲 Dadu keluar **{roll}** — kamu **menang**!\n+{amount * 4 // 5:,} LinkCoin · Saldo: **{new_balance:,}**")
+        else:
+            new_balance = self.store.change_balance(ctx.author.id, -amount, "dice_loss", today, {"roll": roll, "pick": pilihan})
+            await ctx.reply(f"🎲 Dadu keluar **{roll}** — kamu kalah.\n-{amount:,} LinkCoin · Saldo: **{new_balance:,}**")
+
     @commands.command(name="profil", aliases=["profile"])
     async def prefix_profil(self, ctx):
         stats = self.store.profile_stats(ctx.author.id)
@@ -476,6 +505,7 @@ class ConnectionCog(commands.Cog):
             f"🏆 Lifetime: **{stats['lifetime_connections']}**\n"
             f"🤝 Partner unik: **{stats['unique_partners']}**\n"
             f"🔥 Streak terbaik: **{stats['best_streak']} hari**\n"
+            f"💰 Saldo: **{stats['balance']:,} LinkCoin**\n"
             f"🔒 Privacy: **{privacy}**"
         )
 

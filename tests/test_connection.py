@@ -85,6 +85,31 @@ class ConnectionTests(unittest.TestCase):
         interaction_indexes = {row["name"] for row in self.db.execute("PRAGMA index_list(interactions)")}
         self.assertIn("idx_interactions_day", interaction_indexes)
 
+    def test_new_user_gets_initial_balance_and_profile_exposes_it(self):
+        self.assertEqual(self.store.get_balance(42), 10_000)
+        self.assertEqual(self.store.profile_stats(42)["balance"], 10_000)
+
+    def test_balance_change_has_no_negative_balance_and_records_ledger(self):
+        self.assertEqual(self.store.change_balance(42, -250, "test_bet", date(2026, 9, 11)), 9_750)
+        self.assertIsNone(self.store.change_balance(42, -10_000, "too_much", date(2026, 9, 11)))
+        self.assertEqual(self.store.get_balance(42), 9_750)
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM currency_ledger").fetchone()[0], 1)
+
+    def test_seven_day_streak_rewards_both_members_once(self):
+        for day in range(1, 8):
+            self.store.record_connection(1, 2, date(2026, 9, day), 1, 2, day)
+        self.assertEqual(self.store.get_balance(1), 10_100)
+        self.assertEqual(self.store.get_balance(2), 10_100)
+        self.store.record_connection(1, 2, date(2026, 9, 7), 1, 2, 999)
+        self.assertEqual(self.store.get_balance(1), 10_100)
+        self.assertEqual(self.store.get_balance(2), 10_100)
+
+    def test_fourteen_day_streak_adds_second_milestone_reward(self):
+        for day in range(1, 15):
+            self.store.record_connection(1, 2, date(2026, 9, day), 1, 2, day)
+        self.assertEqual(self.store.get_balance(1), 10_200)
+        self.assertEqual(self.store.get_balance(2), 10_200)
+
     def test_profile_stats_include_connections_and_unique_partners(self):
         self.store.record_connection(1, 2, date(2026, 9, 10), 10, 20, 30)
         self.store.record_connection(1, 2, date(2026, 9, 11), 10, 20, 31)

@@ -8,6 +8,9 @@ from datetime import date, timedelta
 
 log = logging.getLogger("connection.store")
 
+INITIAL_BALANCE = 10_000
+STREAK_REWARD_MILESTONE = 7
+
 
 def canonical_pair(user_a: int, user_b: int) -> tuple[int, int]:
     if user_a == user_b:
@@ -54,6 +57,25 @@ class ConnectionStore:
             opt_out INTEGER NOT NULL DEFAULT 0,
             leaderboard_opt_out INTEGER NOT NULL DEFAULT 0
         );
+        CREATE TABLE IF NOT EXISTS wallets (
+            user_id INTEGER PRIMARY KEY,
+            balance INTEGER NOT NULL DEFAULT 10000,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS currency_ledger (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            event_type TEXT NOT NULL,
+            amount INTEGER NOT NULL,
+            before_balance INTEGER NOT NULL,
+            after_balance INTEGER NOT NULL,
+            event_date TEXT NOT NULL,
+            metadata TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_wallets_balance
+            ON wallets(balance DESC);
+        CREATE INDEX IF NOT EXISTS idx_currency_ledger_user
+            ON currency_ledger(user_id, id);
         CREATE INDEX IF NOT EXISTS idx_pairs_current_connections
             ON pairs(current_connections DESC);
         CREATE INDEX IF NOT EXISTS idx_interactions_day
@@ -82,6 +104,27 @@ class ConnectionStore:
         self.db.execute("INSERT INTO pairs VALUES (?,?,?,?,?,?,?)", (a,b,current,lifetime,streak,day,None)) if not pair["last_connection_date"] else self.db.execute("UPDATE pairs SET current_connections=?, lifetime_connections=?, streak=?, last_connection_date=?, last_decay_date=NULL WHERE user_a=? AND user_b=?", (current,lifetime,streak,day,a,b))
         self.db.execute("INSERT INTO daily_connections VALUES (?,?,?,?,?)", (a,b,day,server_id,channel_id))
         self.db.execute("INSERT INTO ledger(user_a,user_b,event_type,amount,before_value,after_value,event_date,metadata) VALUES(?,?,?,?,?,?,?,?)", (a,b,"daily_connection",1,pair["current_connections"],current,day,json.dumps(metadata or {})))
+        if streak >= STREAK_REWARD_MILESTONE and streak % STREAK_REWARD_MILESTONE == 0:
+            already_paid = self.db.execute(
+                """SELECT 1 FROM currency_ledger
+                   WHERE event_type='streak_reward'
+                     AND metadata LIKE ? AND metadata LIKE ?""",
+                (f'%"pair": "{a}:{b}"%', f'%"streak": {streak}%'),
+            ).fetchone()
+            if already_paid is None:
+                reward = 100
+                for user_id in (a, b):
+                    before = self.get_balance(user_id)
+                    after = before + reward
+                    self.db.execute("UPDATE wallets SET balance=? WHERE user_id=?", (after, user_id))
+                    self.db.execute(
+                        """INSERT INTO currency_ledger
+                           (user_id,event_type,amount,before_balance,after_balance,event_date,metadata)
+                           VALUES(?,?,?,?,?,?,?)""",
+                        (user_id, "streak_reward", reward, before, after, day,
+                         json.dumps({"pair": f"{a}:{b}", "streak": streak})),
+                    )
+                log.info("currency_streak_reward pair=%s streak=%s amount_each=%s", f"{a}:{b}", streak, reward)
         self.db.commit()
         log.info("connection_ledger_event event_type=daily_connection user_a=%s user_b=%s server_id=%s date=%s before=%s after=%s", a, b, server_id, day, pair["current_connections"], current)
         return True
@@ -125,6 +168,35 @@ class ConnectionStore:
         rows=self.db.execute("SELECT * FROM pairs WHERE user_a=? OR user_b=? ORDER BY current_connections DESC",(user_id,user_id)).fetchall()
         return [dict(row) for row in rows]
 
+    def get_balance(self, user_id: int) -> int:
+        self.db.execute(
+            "INSERT OR IGNORE INTO wallets(user_id, balance) VALUES (?, ?)",
+            (int(user_id), INITIAL_BALANCE),
+        )
+        self.db.commit()
+        return self.db.execute(
+            "SELECT balance FROM wallets WHERE user_id=?", (int(user_id),)
+        ).fetchone()[0]
+
+    def change_balance(self, user_id: int, amount: int, event_type: str,
+                       event_date: date, metadata=None) -> int | None:
+        user_id = int(user_id)
+        amount = int(amount)
+        current = self.get_balance(user_id)
+        after = current + amount
+        if after < 0:
+            return None
+        self.db.execute("UPDATE wallets SET balance=? WHERE user_id=?", (after, user_id))
+        self.db.execute(
+            """INSERT INTO currency_ledger
+               (user_id,event_type,amount,before_balance,after_balance,event_date,metadata)
+               VALUES(?,?,?,?,?,?,?)""",
+            (user_id, event_type, amount, current, after, event_date.isoformat(),
+             json.dumps(metadata or {})),
+        )
+        self.db.commit()
+        return after
+
     def profile_stats(self, user_id: int) -> dict:
         rows = self.connections_for(user_id)
         partners = {
@@ -136,6 +208,7 @@ class ConnectionStore:
             "lifetime_connections": sum(row["lifetime_connections"] for row in rows),
             "unique_partners": len(partners),
             "best_streak": max((row["streak"] for row in rows), default=0),
+            "balance": self.get_balance(user_id),
         }
 
     def server_leaderboard(self, server_id: int, limit: int = 10):

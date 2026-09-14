@@ -505,10 +505,10 @@ class ConnectionCog(commands.Cog):
             # Deduct the stake, then return stake + winnings: net profit = 80%.
             self.store.change_balance(ctx.author.id, -amount, "dice_bet", today, {"roll": roll, "pick": pilihan})
             new_balance = self.store.change_balance(ctx.author.id, amount + (amount * 4 // 5), "dice_win", today, {"roll": roll, "pick": pilihan})
-            await ctx.reply(f"🎲 Dadu keluar **{roll}** — kamu **menang**!\n+{amount * 4 // 5:,} LinkCoin · Saldo: **{new_balance:,}**", mention_author=False)
+            await animation.edit(content=f"🎲 Dadu keluar **{roll}** — kamu **menang**!\n+{amount * 4 // 5:,} LinkCoin · Saldo: **{new_balance:,}**")
         else:
             new_balance = self.store.change_balance(ctx.author.id, -amount, "dice_loss", today, {"roll": roll, "pick": pilihan})
-            await ctx.reply(f"🎲 Dadu keluar **{roll}** — kamu kalah.\n-{amount:,} LinkCoin · Saldo: **{new_balance:,}**", mention_author=False)
+            await animation.edit(content=f"🎲 Dadu keluar **{roll}** — kamu kalah.\n-{amount:,} LinkCoin · Saldo: **{new_balance:,}**")
 
     @commands.command(name="games", aliases=["game", "permainan"])
     async def games(self, ctx):

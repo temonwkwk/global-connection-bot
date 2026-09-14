@@ -17,6 +17,7 @@ Riwayat perubahan proyek: [`CHANGELOG.md`](CHANGELOG.md).
 - Wallet LinkCoin: user baru mendapat **10.000 LinkCoin**, terlihat di profil.
 - Streak 7 hari memberi **100 LinkCoin** ke masing-masing member pasangan (milestone tiap kelipatan 7).
 - Minigame pertama: `Q!dice <taruhan> high/low`, taruhan 10–2.000 LinkCoin.
+- Dice memiliki animasi kocok dan cooldown **10 detik per user**.
 
 ## Command
 

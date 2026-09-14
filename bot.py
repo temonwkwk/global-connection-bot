@@ -1,10 +1,12 @@
 """Global Connection bot: mutual server interactions earn one connection per pair/day."""
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import secrets
 import sqlite3
+import time
 from logging.handlers import RotatingFileHandler
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -36,6 +38,8 @@ console_handler = logging.StreamHandler()
 console_handler.setFormatter(logging.Formatter(log_format))
 logging.basicConfig(level=logging.INFO, handlers=[console_handler, file_handler])
 log = logging.getLogger("connection")
+DICE_COOLDOWN_SECONDS = 10
+DICE_ANIMATION_STEPS = ("🎲 Mengocok dadu", "🎲 Dadu berputar", "🎲 Menentukan hasil")
 
 intents = discord.Intents.default()
 intents.members = True
@@ -171,6 +175,7 @@ class ConnectionCog(commands.Cog):
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.execute("PRAGMA foreign_keys=ON")
         self.store = ConnectionStore(self.db)
+        self.dice_cooldowns: dict[int, float] = {}
         self.daily_decay.start()
         log.info("store_ready db=%s timezone=%s", DB_FILE, CONNECTION_TIMEZONE)
 
@@ -472,6 +477,10 @@ class ConnectionCog(commands.Cog):
     async def dice(self, ctx, amount: int = 0, pilihan: str = ""):
         """High-low dice: Q!dice <taruhan> high|low."""
         pilihan = pilihan.lower()
+        remaining = DICE_COOLDOWN_SECONDS - (time.monotonic() - self.dice_cooldowns.get(ctx.author.id, 0))
+        if remaining > 0:
+            await ctx.reply(f"⏳ Tunggu **{remaining:.1f} detik** lagi sebelum `Q!dice` berikutnya.", mention_author=False)
+            return
         if amount <= 0 or pilihan not in {"high", "low", "tinggi", "rendah"}:
             await ctx.reply("Pakai: `Q!dice <taruhan> high/low` · taruhan 10–2.000 LinkCoin.")
             return
@@ -481,8 +490,14 @@ class ConnectionCog(commands.Cog):
         pilihan = "high" if pilihan in {"high", "tinggi"} else "low"
         balance = self.store.get_balance(ctx.author.id)
         if balance < amount:
-            await ctx.reply(f"Saldo kamu **{balance:,} LinkCoin**, tidak cukup untuk taruhan itu.")
+            await ctx.reply(f"Saldo kamu **{balance:,} LinkCoin**, tidak cukup untuk taruhan itu.", mention_author=False)
             return
+        self.dice_cooldowns[ctx.author.id] = time.monotonic()
+        animation = await ctx.reply("🎲 Mengocok dadu...", mention_author=False)
+        for step in DICE_ANIMATION_STEPS[1:]:
+            await asyncio.sleep(0.7)
+            await animation.edit(content=f"{step}...")
+        await asyncio.sleep(0.7)
         roll = secrets.randbelow(11) + 2
         menang = (pilihan == "low" and 2 <= roll <= 6) or (pilihan == "high" and 8 <= roll <= 12)
         today = utc_date()
@@ -490,10 +505,10 @@ class ConnectionCog(commands.Cog):
             # Deduct the stake, then return stake + winnings: net profit = 80%.
             self.store.change_balance(ctx.author.id, -amount, "dice_bet", today, {"roll": roll, "pick": pilihan})
             new_balance = self.store.change_balance(ctx.author.id, amount + (amount * 4 // 5), "dice_win", today, {"roll": roll, "pick": pilihan})
-            await ctx.reply(f"🎲 Dadu keluar **{roll}** — kamu **menang**!\n+{amount * 4 // 5:,} LinkCoin · Saldo: **{new_balance:,}**")
+            await ctx.reply(f"🎲 Dadu keluar **{roll}** — kamu **menang**!\n+{amount * 4 // 5:,} LinkCoin · Saldo: **{new_balance:,}**", mention_author=False)
         else:
             new_balance = self.store.change_balance(ctx.author.id, -amount, "dice_loss", today, {"roll": roll, "pick": pilihan})
-            await ctx.reply(f"🎲 Dadu keluar **{roll}** — kamu kalah.\n-{amount:,} LinkCoin · Saldo: **{new_balance:,}**")
+            await ctx.reply(f"🎲 Dadu keluar **{roll}** — kamu kalah.\n-{amount:,} LinkCoin · Saldo: **{new_balance:,}**", mention_author=False)
 
     @commands.command(name="games", aliases=["game", "permainan"])
     async def games(self, ctx):

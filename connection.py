@@ -159,6 +159,26 @@ class ConnectionStore:
         """, (server_id, limit)).fetchall()
         return [dict(row) for row in rows]
 
+    def global_leaderboard(self, limit: int = 10):
+        rows = self.db.execute("""
+            SELECT user_a, user_b, COUNT(*) AS connections
+            FROM daily_connections
+            WHERE NOT EXISTS (
+                SELECT 1 FROM hidden_pairs h
+                WHERE h.user_a = daily_connections.user_a
+                  AND h.user_b = daily_connections.user_b
+            )
+              AND NOT EXISTS (
+                SELECT 1 FROM user_privacy u
+                WHERE u.user_id IN (user_a, user_b)
+                  AND u.leaderboard_opt_out=1
+            )
+            GROUP BY user_a, user_b
+            ORDER BY connections DESC, user_a, user_b
+            LIMIT ?
+        """, (limit,)).fetchall()
+        return [dict(row) for row in rows]
+
     def set_privacy(self, user_id: int, *, opt_out: bool | None = None,
                     leaderboard_opt_out: bool | None = None) -> None:
         current = self.db.execute(

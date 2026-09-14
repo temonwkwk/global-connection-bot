@@ -22,6 +22,7 @@ Q!intro / q!intro
 Q!koneksi / q!koneksi (top 5; koneksi yang di-hide tampil sebagai `someone`)
 Q!koneksi @member
 `Q!sembunyikankoneksi @member on/off` — sembunyikan atau tampilkan koneksi dengan member tertentu
+Q!peringkatglobal / q!peringkatglobal — peringkat koneksi global lintas server
 `Q!peringkat` / `q!peringkat` — peringkat koneksi server
 Q!resetkoneksi / q!resetkoneksi
 Q!bantuan / q!bantuan
@@ -32,6 +33,7 @@ Slash command yang tersedia:
 ```text
 /koneksi
 /koneksi @member
+/peringkat_global
 /peringkat_server
 /statistik
 /profil

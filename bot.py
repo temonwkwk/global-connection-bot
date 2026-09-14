@@ -124,7 +124,7 @@ class ResetPairView(discord.ui.View):
         self.cog.store.reset_pair(self.owner_id, self.member.id)
         for child in self.children:
             child.disabled = True
-        await interaction.response.edit_message(content=f"✅ Data koneksi kamu dengan {self.member.mention} sudah direset.", view=self)
+        await interaction.response.edit_message(content=f"✅ Data koneksi kamu dengan {self.member.display_name} sudah direset.", view=self)
 
     @discord.ui.button(label="Batal", style=discord.ButtonStyle.secondary)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -229,8 +229,11 @@ class ConnectionCog(commands.Cog):
         for target_id in await self.targets_from(message):
             made = self.record_target(message.guild.id, message.author.id, target_id, message.channel.id, message.id)
             if made:
+                author_name = message.author.display_name or message.author.name or f"User {message.author.id}"
+                target_user = self.client.get_user(target_id)
+                target_name = target_user.display_name if target_user else f"User {target_id}"
                 await message.reply(
-                    f"🔗 **Connection terbentuk!** <@{message.author.id}> × <@{target_id}>\n"
+                    f"🔗 **Connection terbentuk!** {author_name} × {target_name}\n"
                     "Koneksi hari ini **+1**."
                 )
 
@@ -253,7 +256,7 @@ class ConnectionCog(commands.Cog):
         )
         embed.add_field(name="Cara mendapatkan koneksi", value="Mention atau reply member lain. Kalau dia membalas atau mention balik di hari yang sama, kalian mendapat **+1 koneksi**.", inline=False)
         embed.add_field(name="Aturan", value="Satu pasangan maksimal +1 per hari. DM tidak dihitung. Koneksi berlaku global selama bot ada di server tempat interaksi terjadi.", inline=False)
-        embed.add_field(name="Cek koneksi", value="`/koneksi` — daftar koneksi pribadi\n`/koneksi @member` — detail pasangan\n`/profil` — statistik koneksi pribadi\n`/peringkat_server` — leaderboard server\n`/statistik` — statistik komunitas\n`/privasi` — pengaturan opt-out", inline=False)
+        embed.add_field(name="Cek koneksi", value="`/koneksi` — daftar koneksi pribadi\n`/koneksi @member` — detail pasangan\n`/profil` — statistik koneksi pribadi\n`/peringkat_server` — leaderboard server\n`/peringkat_global` — leaderboard global\n`/statistik` — statistik komunitas\n`/privasi` — pengaturan opt-out", inline=False)
         embed.add_field(name="Streak & histori", value="Streak bertambah jika terhubung setiap hari. Setelah 3 hari tanpa koneksi, current connection berkurang 50% (dibulatkan ke bawah), tetapi lifetime dan ledger tetap tersimpan.", inline=False)
         embed.add_field(name="➕ Invite ke server lain", value="[Klik di sini untuk invite Solit](https://discord.com/oauth2/authorize?client_id=1547649664&scope=bot%20applications.commands&permissions=2147569)\nCatatan: kamu harus punya izin **Manage Server / Kelola Server** atau izin untuk menambahkan bot ke server tersebut.", inline=False)
         embed.set_footer(text="Ngobrol santai, jangan spam mention 😊")
@@ -336,7 +339,18 @@ class ConnectionCog(commands.Cog):
         text = "\n".join(lines) or "Belum ada koneksi di server ini."
         await interaction.response.send_message(f"🏠 **Peringkat Koneksi Server**\n{text}")
 
-    @app_commands.command(name="statistik", description="Lihat statistik komunitas server")
+    @app_commands.command(name="peringkat_global", description="Lihat peringkat koneksi global lintas server")
+    async def peringkat_global(self, interaction: discord.Interaction):
+        rows = self.store.global_leaderboard()
+        lines = []
+        for index, row in enumerate(rows, start=1):
+            first = await self.leaderboard_name(row["user_a"])
+            second = await self.leaderboard_name(row["user_b"])
+            lines.append(f"**{index}.** **{first}** × **{second}** — **{row['connections']}**")
+        text = "\n".join(lines) or "Belum ada koneksi global."
+        await interaction.response.send_message(f"🌐 **Peringkat Koneksi Global**\n{text}")
+
+    @app_commands.command(name="statistik", description="Lihat statistik koneksi server")
     async def statistik(self, interaction: discord.Interaction):
         if interaction.guild is None:
             await interaction.response.send_message("Command ini hanya bisa dipakai di server.", ephemeral=True)
@@ -475,6 +489,16 @@ class ConnectionCog(commands.Cog):
             lines.append(f"**{index}.** **{first}** × **{second}** — **{row['connections']}**")
         await ctx.reply("🏠 **Peringkat Koneksi Server**\n" + ("\n".join(lines) or "Belum ada koneksi di server ini."))
 
+    @commands.command(name="peringkatglobal", aliases=["globalranking", "globalleaderboard"])
+    async def prefix_peringkat_global(self, ctx):
+        rows = self.store.global_leaderboard()
+        lines = []
+        for index, row in enumerate(rows, start=1):
+            first = await self.leaderboard_name(row["user_a"])
+            second = await self.leaderboard_name(row["user_b"])
+            lines.append(f"**{index}.** **{first}** × **{second}** — **{row['connections']}**")
+        await ctx.reply("🌐 **Peringkat Koneksi Global**\n" + ("\n".join(lines) or "Belum ada koneksi global."))
+
     @commands.command(name="statistik", aliases=["stats", "stat"])
     async def prefix_statistik(self, ctx):
         if not ctx.guild:
@@ -553,7 +577,7 @@ class ConnectionCog(commands.Cog):
         )
         embed.add_field(name="💬 Cara mendapatkan koneksi", value="Mention atau reply member lain. Kalau dia membalas atau mention balik di hari yang sama, kalian mendapat **+1 koneksi**.\n\nContoh:\n> A: @B sudah makan?\n> B: Sudah, kamu?", inline=False)
         embed.add_field(name="📌 Aturan", value="• Satu pasangan maksimal **+1 per hari**\n• DM tidak dihitung\n• Koneksi berlaku global selama bot ada di server interaksi\n• Setelah 3 hari tanpa koneksi, current connection berkurang 50%", inline=False)
-        embed.add_field(name="📊 Command", value="`Q!koneksi` / `q!koneksi` — daftar koneksi\n`Q!koneksi @member` — detail pasangan\n`Q!profil` — statistik koneksi pribadi\n`Q!peringkatserver` — leaderboard server\n`Q!statistik` — statistik komunitas\n`Q!privasi status` — cek privacy\n`Q!privasi optout on/off` — opt-out pencatatan\n`Q!privasi leaderboard on/off` — hide dari leaderboard\n`Q!peringkat` — peringkat koneksi server\n`Q!resetkoneksi` — reset dengan tombol konfirmasi", inline=False)
+        embed.add_field(name="📊 Command", value="`Q!koneksi` / `q!koneksi` — daftar koneksi\n`Q!koneksi @member` — detail pasangan\n`Q!profil` — statistik koneksi pribadi\n`Q!peringkatserver` — leaderboard server\n`Q!statistik` — statistik komunitas\n`Q!privasi status` — cek privacy\n`Q!privasi optout on/off` — opt-out pencatatan\n`Q!privasi leaderboard on/off` — hide dari leaderboard\n`Q!peringkatglobal` — peringkat koneksi global\n`Q!resetkoneksi` — reset dengan tombol konfirmasi", inline=False)
         embed.add_field(name="➕ Invite ke server lain", value="[Klik di sini untuk invite Solit](https://discord.com/oauth2/authorize?client_id=1547649664&scope=bot%20applications.commands&permissions=2147569)\nCatatan: kamu harus punya izin **Manage Server / Kelola Server** atau izin untuk menambahkan bot ke server tersebut.", inline=False)
         embed.set_footer(text="Ngobrol santai, jangan spam mention 😊")
         await ctx.send(embed=embed)
@@ -584,7 +608,7 @@ class ConnectionCog(commands.Cog):
 
     @commands.command(name="bantuan", aliases=["help"])
     async def bantuan(self, ctx):
-        await ctx.reply("Pakai `Q!intro` untuk panduan. Command utama: `Q!koneksi`, `Q!profil`, `Q!peringkat`, `Q!peringkatserver`, `Q!statistik`, dan `Q!privasi`.")
+        await ctx.reply("Pakai `Q!intro` untuk panduan. Command utama: `Q!koneksi`, `Q!profil`, `Q!peringkat`, `Q!peringkatglobal`, `Q!peringkatserver`, `Q!statistik`, dan `Q!privasi`.")
 
 
 @bot.event

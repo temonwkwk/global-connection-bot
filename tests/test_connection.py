@@ -102,6 +102,13 @@ class ConnectionTests(unittest.TestCase):
         self.assertEqual(rows[0]["connections"], 1)
         self.assertEqual((rows[0]["user_a"], rows[0]["user_b"]), (1, 2))
 
+    def test_global_leaderboard_aggregates_connections_across_servers(self):
+        self.store.record_connection(1, 2, date(2026, 9, 11), 10, 20, 30)
+        self.store.record_connection(1, 2, date(2026, 9, 12), 11, 21, 31)
+        rows = self.store.global_leaderboard()
+        self.assertEqual(rows[0]["connections"], 2)
+        self.assertEqual((rows[0]["user_a"], rows[0]["user_b"]), (1, 2))
+
     def test_hidden_pair_is_excluded_from_server_leaderboard(self):
         self.store.record_connection(1, 2, date(2026, 9, 11), 10, 20, 30)
         self.store.set_pair_hidden(1, 2, True)

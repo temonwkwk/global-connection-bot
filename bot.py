@@ -495,6 +495,45 @@ class ConnectionCog(commands.Cog):
             new_balance = self.store.change_balance(ctx.author.id, -amount, "dice_loss", today, {"roll": roll, "pick": pilihan})
             await ctx.reply(f"🎲 Dadu keluar **{roll}** — kamu kalah.\n-{amount:,} LinkCoin · Saldo: **{new_balance:,}**")
 
+    @commands.command(name="games", aliases=["game", "permainan"])
+    async def games(self, ctx):
+        embed = discord.Embed(
+            title="🎮 LinkCoin Games",
+            description="Game yang tersedia untuk memakai saldo LinkCoin kamu.",
+            color=discord.Color.gold(),
+        )
+        embed.add_field(
+            name="🎲 High-Low Dice",
+            value=(
+                "`Q!dice <taruhan> high` atau `Q!dice <taruhan> low`\n"
+                "Bot melempar dua dadu (hasil 2–12). **Low** menang di 2–6, "
+                "**High** menang di 8–12. Hasil 7 selalu kalah.\n"
+                "Menang: profit bersih **80%** dari taruhan."
+            ),
+            inline=False,
+        )
+        embed.add_field(
+            name="💰 Aturan saldo",
+            value=(
+                "Saldo awal user baru: **10.000 LinkCoin**\n"
+                "Taruhan minimum: **10** · maksimum: **2.000**\n"
+                "Cek saldo di `Q!profil`. Streak koneksi 7 hari memberi "
+                "**+100 LinkCoin** per anggota pasangan."
+            ),
+            inline=False,
+        )
+        embed.add_field(
+            name="💡 Contoh",
+            value=(
+                "`Q!dice 100 high`\n"
+                "Kalau hasil 8–12, profit kamu **+80**. Kalau kalah, "
+                "saldo berkurang **100**."
+            ),
+            inline=False,
+        )
+        embed.set_footer(text="LinkCoin hanya currency virtual di bot dan tidak bisa diuangkan.")
+        await ctx.reply(embed=embed)
+
     @commands.command(name="profil", aliases=["profile"])
     async def prefix_profil(self, ctx):
         stats = self.store.profile_stats(ctx.author.id)
@@ -638,7 +677,7 @@ class ConnectionCog(commands.Cog):
 
     @commands.command(name="bantuan", aliases=["help"])
     async def bantuan(self, ctx):
-        await ctx.reply("Pakai `Q!intro` untuk panduan. Command utama: `Q!koneksi`, `Q!profil`, `Q!peringkat`, `Q!peringkatglobal`, `Q!peringkatserver`, `Q!statistik`, dan `Q!privasi`.")
+        await ctx.reply("Pakai `Q!intro` untuk panduan. Game: `Q!games` / `Q!dice <taruhan> high|low`. Command utama: `Q!koneksi`, `Q!profil`, `Q!peringkat`, `Q!peringkatglobal`, `Q!peringkatserver`, `Q!statistik`, dan `Q!privasi`.")
 
 
 @bot.event

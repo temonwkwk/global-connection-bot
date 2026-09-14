@@ -25,6 +25,7 @@ Q!intro / q!intro
 Q!koneksi / q!koneksi (top 5; koneksi yang di-hide tampil sebagai `someone`)
 Q!koneksi @member
 Q!dice <taruhan> high/low — game dadu LinkCoin (10–2.000)
+Q!games / q!games — daftar game dan tutorial singkat
 Q!profil — termasuk saldo LinkCoin
 `Q!sembunyikankoneksi @member on/off` — sembunyikan atau tampilkan koneksi dengan member tertentu
 Q!peringkatglobal / q!peringkatglobal — peringkat koneksi global lintas server
